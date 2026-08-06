@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.vscode/
+.DS_Store
+Thumbs.db
+data/raw/
+models/*.joblib
+received_files/
+
+# This prevents the large .venv folder from being uploaded to GitHub.

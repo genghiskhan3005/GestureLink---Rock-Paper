@@ -1,0 +1,3 @@
+# Records the required Python packages
+
+opencv-python
