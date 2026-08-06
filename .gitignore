@@ -8,5 +8,6 @@ Thumbs.db
 data/raw/
 models/*.joblib
 received_files/
+models/*.task
 
 # This prevents the large .venv folder from being uploaded to GitHub.
