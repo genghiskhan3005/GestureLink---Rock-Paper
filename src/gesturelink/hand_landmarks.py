@@ -11,6 +11,7 @@ import time # This is used to create timestamps, MediaPipe VIDEO mode requires e
 import cv2
 import mediapipe as mp  # Detects hand and tracks landmarks
 
+from pose_rules import classify_pose
 
 
 DEFAULT_CAMERA_INDEX = 0
@@ -38,6 +39,9 @@ def draw_hand_landmarks(
     for hand_index, hand_landmarks in enumerate(
         detection_result.hand_landmarks # List of detected hands
     ):
+
+        pose = classify_pose(hand_landmarks)
+
         # Converts MediaPipe's normalized coordinates into pixel coordinates. MediaPipe returns coordinates like 0.5 and 0.4 (ranging from 0 to 1). This function converts them into actual positions of where to draw something
         pixel_points = [
             (
@@ -83,6 +87,19 @@ def draw_hand_landmarks(
             confidence = handedness.score
 
             label = f"{hand_name} hand: {confidence:.2f}"
+
+            pose_label = pose.replace("_", " ").title()
+
+            cv2.putText(
+                frame,
+                f"Pose: {pose_label}",
+                (20, 70),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (30, 30, 30),
+                2,
+                cv2.LINE_AA,
+            )
 
             label_x = min(point[0] for point in pixel_points)   # Finds the smallest x-coordinate in the hand (leftmost part)
             label_y = max(
