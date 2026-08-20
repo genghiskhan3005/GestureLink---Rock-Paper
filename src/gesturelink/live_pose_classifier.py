@@ -1,22 +1,25 @@
 """
-Running GestureLink's trained ML model in real time.
+Running GestureLink's trained ML pose classifier in real time.
 
 Pipeline:
 
 Camera
-   ↓
+    ↓
 MediaPipe Hand Detection
-   ↓
+    ↓
 21 Hand Landmarks
-   ↓
+    ↓
 Feature Engineering
-   ↓
+    ↓
 73 Features
-   ↓
+    ↓
 Random Forest Classifier
-   ↓
-Gesture Prediction
+    ↓
+Prediction Smoothing
+    ↓
+Stable Gesture Output
 """
+
 
 from pathlib import Path
 import time
@@ -27,20 +30,22 @@ import mediapipe as mp
 import pandas as pd
 
 from feature_engineering import extract_features
+from prediction_smoother import PredictionSmoother
 
 
-# Setting the default laptop webcam.
+# Setting the default webcam index.
 DEFAULT_CAMERA_INDEX = 0
 
+
 # Naming the OpenCV display window.
-WINDOW_NAME = "GestureLink - ML Classifier"
+WINDOW_NAME = "GestureLink - ML Pose Classifier"
 
 
 # Finding the project root directory.
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
-# Locating the trained MediaPipe hand detector.
+# Locating the MediaPipe hand detection model.
 HAND_MODEL_PATH = (
     PROJECT_ROOT
     / "models"
@@ -48,7 +53,7 @@ HAND_MODEL_PATH = (
 )
 
 
-# Locating our trained Random Forest model.
+# Locating the trained Random Forest model.
 CLASSIFIER_PATH = (
     PROJECT_ROOT
     / "models"
@@ -56,34 +61,40 @@ CLASSIFIER_PATH = (
 )
 
 
+
 def load_classifier():
     """
-    Loading the trained GestureLink classifier.
+    Loading the trained ML classifier.
     """
 
     # Checking whether the trained model exists.
     if not CLASSIFIER_PATH.exists():
         raise FileNotFoundError(
-            f"Classifier not found at {CLASSIFIER_PATH}"
+            f"Classifier not found at: {CLASSIFIER_PATH}"
         )
+
 
     # Loading the saved model bundle.
     model_bundle = joblib.load(
         CLASSIFIER_PATH
     )
 
-    # Extracting the actual ML model.
+
+    # Extracting the trained sklearn model.
     model = model_bundle["model"]
+
 
     # Extracting the feature order used during training.
     feature_columns = model_bundle[
         "feature_columns"
     ]
 
-    # Extracting the model name for displaying.
+
+    # Extracting the model name.
     model_name = model_bundle[
         "model_name"
     ]
+
 
     return (
         model,
@@ -92,30 +103,35 @@ def load_classifier():
     )
 
 
-def predict_gesture(
+
+def predict_pose(
     landmarks,
     model,
     feature_columns,
 ):
     """
-    Predicting the current hand gesture.
+    Predicting the current hand pose using
+    the trained ML model.
     """
 
-    # Converting MediaPipe landmarks into the same
-    # 73 features used during training.
+
+    # Converting MediaPipe landmarks into
+    # the same 73 features used during training.
     features = extract_features(
         landmarks
     )
 
-    # Creating a DataFrame because sklearn
-    # expects the same feature structure.
+
+    # Creating a DataFrame with the same
+    # feature order used during training.
     feature_frame = pd.DataFrame(
         [features],
         columns=feature_columns,
     )
 
-    # Asking the Random Forest model
-    # to classify the gesture.
+
+    # Asking the trained model to classify
+    # the current hand pose.
     prediction = model.predict(
         feature_frame
     )[0]
@@ -123,7 +139,9 @@ def predict_gesture(
 
     confidence = None
 
-    # Checking whether the model supports probability output.
+
+    # Checking whether the model supports
+    # probability prediction.
     if hasattr(
         model,
         "predict_proba",
@@ -135,11 +153,15 @@ def predict_gesture(
             )[0]
         )
 
+
+        # Finding the probability of the
+        # predicted class.
         predicted_index = list(
             model.classes_
         ).index(
             prediction
         )
+
 
         confidence = probabilities[
             predicted_index
@@ -152,26 +174,32 @@ def predict_gesture(
     )
 
 
-def draw_landmarks(
+
+def draw_hand_landmarks(
     frame,
     landmarks,
 ):
     """
-    Drawing MediaPipe landmarks on the webcam frame.
+    Drawing hand landmarks and connections.
     """
 
-    height, width, _ = frame.shape
+
+    frame_height, frame_width, _ = (
+        frame.shape
+    )
 
 
-    # Converting normalized MediaPipe coordinates
-    # into actual pixel positions.
-    points = [
+    # Converting MediaPipe normalized
+    # coordinates into screen pixels.
+    pixel_points = [
         (
             int(
-                landmark.x * width
+                landmark.x
+                * frame_width
             ),
             int(
-                landmark.y * height
+                landmark.y
+                * frame_height
             ),
         )
         for landmark in landmarks
@@ -187,36 +215,48 @@ def draw_landmarks(
 
         cv2.line(
             frame,
-            points[connection.start],
-            points[connection.end],
-            (60,160,60),
+            pixel_points[
+                connection.start
+            ],
+            pixel_points[
+                connection.end
+            ],
+            (60, 160, 60),
             2,
         )
 
 
-    # Drawing all 21 landmarks.
-    for point in points:
+    # Drawing all 21 landmark points.
+    for point in pixel_points:
 
         cv2.circle(
             frame,
             point,
             4,
-            (40,40,220),
+            (40, 40, 220),
             -1,
         )
 
 
-def run_live_classifier():
 
+def run_live_pose_classifier():
     """
-    Running real-time GestureLink ML recognition.
+    Running GestureLink's complete
+    live ML gesture recognition system.
     """
+
 
     (
         model,
         feature_columns,
         model_name,
     ) = load_classifier()
+
+
+    # Creating the prediction smoother.
+    smoother = PredictionSmoother(
+        window_size=5
+    )
 
 
     print(
@@ -236,6 +276,7 @@ def run_live_classifier():
         )
 
 
+
     # Loading MediaPipe model settings.
     base_options = mp.tasks.BaseOptions(
         model_asset_path=str(
@@ -253,6 +294,9 @@ def run_live_classifier():
                 .RunningMode.VIDEO
             ),
             num_hands=1,
+            min_hand_detection_confidence=0.5,
+            min_hand_presence_confidence=0.5,
+            min_tracking_confidence=0.5,
         )
     )
 
@@ -264,6 +308,7 @@ def run_live_classifier():
     print(
         "Press E to exit."
     )
+
 
 
     try:
@@ -280,6 +325,7 @@ def run_live_classifier():
             while True:
 
 
+                # Reading a frame from webcam.
                 frame_received, frame = (
                     camera.read()
                 )
@@ -289,20 +335,26 @@ def run_live_classifier():
                     break
 
 
-                # Mirroring webcam view.
+
+                # Flipping the frame to create
+                # a mirror-like webcam view.
                 frame = cv2.flip(
                     frame,
                     1,
                 )
 
 
-                # Converting BGR to RGB.
+
+                # Converting OpenCV BGR
+                # into MediaPipe RGB format.
                 rgb_frame = cv2.cvtColor(
                     frame,
                     cv2.COLOR_BGR2RGB,
                 )
 
 
+
+                # Creating a MediaPipe image.
                 media_pipe_image = mp.Image(
                     image_format=(
                         mp.ImageFormat.SRGB
@@ -311,14 +363,18 @@ def run_live_classifier():
                 )
 
 
+
+                # Creating increasing timestamps
+                # required by MediaPipe VIDEO mode.
                 timestamp_ms = int(
                     time.monotonic()
                     * 1000
                 )
 
 
+
                 # Detecting hand landmarks.
-                result = (
+                detection_result = (
                     landmarker
                     .detect_for_video(
                         media_pipe_image,
@@ -327,23 +383,27 @@ def run_live_classifier():
                 )
 
 
-                if result.hand_landmarks:
+
+                if detection_result.hand_landmarks:
 
 
+                    # Taking the first detected hand.
                     landmarks = (
-                        result
+                        detection_result
                         .hand_landmarks[0]
                     )
 
 
-                    draw_landmarks(
+
+                    draw_hand_landmarks(
                         frame,
                         landmarks,
                     )
 
 
+
                     prediction, confidence = (
-                        predict_gesture(
+                        predict_pose(
                             landmarks,
                             model,
                             feature_columns,
@@ -351,25 +411,43 @@ def run_live_classifier():
                     )
 
 
-                    label = (
-                        prediction
-                        .replace("_"," ")
+
+                    # Sending raw prediction
+                    # into the smoother.
+                    stable_prediction = (
+                        smoother.update(
+                            prediction
+                        )
+                    )
+
+
+
+                    readable_prediction = (
+                        stable_prediction
+                        .replace("_", " ")
                         .title()
                     )
 
 
+
+                    # Showing stable gesture.
                     cv2.putText(
                         frame,
-                        f"Gesture: {label}",
-                        (20,40),
+                        (
+                            f"Gesture: "
+                            f"{readable_prediction}"
+                        ),
+                        (20, 40),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.8,
-                        (30,30,30),
+                        (30, 30, 30),
                         2,
+                        cv2.LINE_AA,
                     )
 
 
-                    if confidence:
+
+                    if confidence is not None:
 
                         cv2.putText(
                             frame,
@@ -377,26 +455,54 @@ def run_live_classifier():
                                 f"Confidence: "
                                 f"{confidence:.2f}"
                             ),
-                            (20,75),
+                            (20, 75),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.7,
-                            (30,30,30),
+                            (30, 30, 30),
                             2,
+                            cv2.LINE_AA,
                         )
+
 
 
                 else:
 
+                    # Resetting history when no hand
+                    # is being detected.
+                    smoother.reset()
+
+
                     cv2.putText(
                         frame,
                         "No hand detected",
-                        (20,40),
+                        (20, 40),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.8,
-                        (30,30,30),
+                        (30, 30, 30),
                         2,
+                        cv2.LINE_AA,
                     )
 
+
+
+                # Showing model name.
+                cv2.putText(
+                    frame,
+                    (
+                        f"Model: "
+                        f"{model_name}"
+                    ),
+                    (20, 150),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (30, 30, 30),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+
+
+                # Showing exit instruction.
                 cv2.putText(
                     frame,
                     "Press E to exit",
@@ -405,25 +511,32 @@ def run_live_classifier():
                     0.7,
                     (30, 30, 30),
                     2,
+                    cv2.LINE_AA,
                 )
 
+
+
+                # Displaying the final processed frame.
                 cv2.imshow(
                     WINDOW_NAME,
                     frame,
                 )
 
 
-                key = (
+
+                pressed_key = (
                     cv2.waitKey(1)
                     & 0xFF
                 )
 
 
-                if key in (
+
+                if pressed_key in (
                     ord("e"),
                     ord("E"),
                 ):
                     break
+
 
 
     finally:
@@ -431,14 +544,17 @@ def run_live_classifier():
         # Releasing the webcam.
         camera.release()
 
-        # Closing OpenCV windows.
+
+        # Closing all OpenCV windows.
         cv2.destroyAllWindows()
 
+
         print(
-            "GestureLink ML closed safely."
+            "GestureLink closed safely."
         )
 
 
 
 if __name__ == "__main__":
-    run_live_classifier()
+
+    run_live_pose_classifier()
