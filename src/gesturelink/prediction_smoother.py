@@ -1,43 +1,68 @@
 """
-Prediction smoothing module for GestureLink.
+Adaptive prediction smoothing for GestureLink.
 
-Reducing frame-to-frame prediction noise while
-keeping gesture transitions responsive.
+Reducing ML prediction noise while allowing
+fast gesture transitions.
+
+Logic:
+
+Current stable gesture
+        |
+        ↓
+New prediction arrives
+        |
+        ↓
+If it matches:
+    keeping it immediately
+
+If it is different:
+    counting consecutive confirmations
+
+After enough confirmations:
+    switching gesture
 """
-
-
-from collections import deque
-from collections import Counter
 
 
 class PredictionSmoother:
     """
-    Smoothing ML predictions using a short
-    rolling prediction history.
+    Creating an adaptive gesture smoother.
+
+    Keeping the current gesture stable while
+    detecting intentional gesture changes.
     """
 
 
     def __init__(
         self,
-        window_size: int = 5,
+        confirmation_frames: int = 3,
     ):
         """
-        Initializing prediction history.
+        Initializing smoother settings.
 
-        Smaller windows:
-            Faster response
-            Less smoothing
-
-        Larger windows:
-            Slower response
-            More stability
+        confirmation_frames:
+        Number of consecutive new predictions
+        required before accepting a change.
         """
 
 
-        # Creating a fixed-size queue for
-        # storing recent predictions.
-        self.prediction_history = deque(
-            maxlen=window_size
+        # Storing the currently accepted gesture.
+        self.current_prediction = None
+
+
+        # Storing the possible new gesture
+        # that is waiting for confirmation.
+        self.candidate_prediction = None
+
+
+        # Counting how many times the candidate
+        # gesture has appeared consecutively.
+        self.candidate_count = 0
+
+
+        # Setting how many frames are required
+        # before switching gestures.
+        self.confirmation_frames = (
+            confirmation_frames
         )
 
 
@@ -46,43 +71,85 @@ class PredictionSmoother:
         prediction: str,
     ) -> str:
         """
-        Adding a new prediction and returning
-        the most stable current gesture.
+        Updating the smoother with a new ML prediction.
         """
 
 
-        # Adding the newest prediction
-        # into the history buffer.
-        self.prediction_history.append(
-            prediction
-        )
+        # Initializing the first gesture immediately.
+        if self.current_prediction is None:
 
+            self.current_prediction = prediction
 
-        # Counting occurrences of each
-        # gesture in recent frames.
-        counts = Counter(
-            self.prediction_history
-        )
-
-
-        # Returning the gesture appearing
-        # most frequently.
-        stable_prediction = (
-            counts
-            .most_common(1)[0][0]
-        )
-
-
-        return stable_prediction
+            return self.current_prediction
 
 
 
-    def reset(self) -> None:
+        # If prediction matches the current gesture,
+        # keeping it and clearing any transition.
+        if prediction == self.current_prediction:
+
+
+            self.candidate_prediction = None
+
+            self.candidate_count = 0
+
+
+            return self.current_prediction
+
+
+
+        # If prediction is different from current,
+        # checking whether it is a possible transition.
+        if prediction == self.candidate_prediction:
+
+
+            # Increasing confirmation count.
+            self.candidate_count += 1
+
+
+        else:
+
+
+            # Starting a new candidate gesture.
+            self.candidate_prediction = prediction
+
+            self.candidate_count = 1
+
+
+
+        # Switching only after enough confirmations.
+        if (
+            self.candidate_count
+            >= self.confirmation_frames
+        ):
+
+
+            self.current_prediction = (
+                self.candidate_prediction
+            )
+
+
+            self.candidate_prediction = None
+
+            self.candidate_count = 0
+
+
+
+        return self.current_prediction
+
+
+
+    def reset(self):
         """
-        Clearing previous predictions when
-        tracking is interrupted.
+        Resetting smoother state.
         """
 
 
-        # Removing stored predictions.
-        self.prediction_history.clear()
+        # Removing stored gesture history.
+        self.current_prediction = None
+
+
+        self.candidate_prediction = None
+
+
+        self.candidate_count = 0

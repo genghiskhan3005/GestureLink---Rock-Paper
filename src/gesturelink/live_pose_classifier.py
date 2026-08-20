@@ -253,10 +253,9 @@ def run_live_pose_classifier():
     ) = load_classifier()
 
 
-    # Creating the prediction smoother.
     smoother = PredictionSmoother(
-        window_size=5
-    )
+    confirmation_frames=3
+)
 
 
     print(
