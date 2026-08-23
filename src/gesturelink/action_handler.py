@@ -2,34 +2,48 @@
 Action handler for GestureLink.
 
 Receiving gesture events from the gesture engine
-and executing the correct computer action.
-
-Current supported actions:
-
-copy
-paste
+and connecting them to file transfer actions.
 """
 
 
-from pathlib import Path
-import shutil
+from transfer_manager import TransferManager
 
 
 
 class ActionHandler:
     """
-    Managing actions triggered by gestures.
+    Managing gesture-triggered actions.
     """
 
 
     def __init__(self):
         """
-        Initializing stored transfer data.
+        Initializing the action system.
         """
 
 
-        # Storing the copied file path.
-        self.copied_file = None
+        # Creating the transfer manager.
+        self.transfer_manager = TransferManager()
+
+
+
+        # Storing a test image path.
+        # Later this will come from the selected image.
+        self.selected_file = None
+
+
+
+    def set_selected_file(
+        self,
+        file_path: str,
+    ):
+        """
+        Selecting the file that will be copied.
+        """
+
+
+        # Saving the selected file path.
+        self.selected_file = file_path
 
 
 
@@ -43,21 +57,18 @@ class ActionHandler:
         """
 
 
-        # Checking whether a copy gesture
-        # has been detected.
         if action == "copy":
 
             return self.copy()
 
 
-        # Checking whether a paste gesture
-        # has been detected.
+
         elif action == "paste":
 
             return self.paste()
 
 
-        # Ignoring unknown actions.
+
         else:
 
             print(
@@ -68,65 +79,38 @@ class ActionHandler:
 
 
 
-    def copy(
-        self,
-    ):
+    def copy(self):
         """
-        Handling copy event.
-
-        Later this will:
-            - capture selected image
-            - store metadata
-            - prepare transfer package
+        Handling copy gesture.
         """
 
 
-        print(
-            "COPY gesture detected."
-        )
-
-
-        # Temporary placeholder.
-        # Real file selection comes later.
-        self.copied_file = (
-            "temporary_image.png"
-        )
-
-
-        return True
-
-
-
-    def paste(
-        self,
-    ):
-        """
-        Handling paste event.
-
-        Later this will:
-            - receive transferred image
-            - save it locally
-            - display it
-        """
-
-
-        print(
-            "PASTE gesture detected."
-        )
-
-
-        if self.copied_file:
+        if self.selected_file is None:
 
             print(
-                f"Pasting: {self.copied_file}"
+                "No file selected for copying."
             )
 
-            return True
+            return False
 
 
-        print(
-            "No copied item available."
+
+        # Sending the selected file
+        # into the transfer buffer.
+        return self.transfer_manager.copy_file(
+            self.selected_file
         )
 
 
-        return False
+
+    def paste(self):
+        """
+        Handling paste gesture.
+        """
+
+
+        # Creating a destination folder
+        # for testing paste.
+        return self.transfer_manager.paste_file(
+            "pasted_files"
+        )

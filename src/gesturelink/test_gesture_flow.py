@@ -79,6 +79,10 @@ if __name__ == "__main__":
     # Creating one shared action handler.
     action_handler = ActionHandler()
 
+    action_handler.set_selected_file(
+    "tests/shawshank_redemption.jpg"
+)
+
 
 
     print("=" * 50)
