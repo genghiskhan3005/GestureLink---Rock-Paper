@@ -32,6 +32,9 @@ import pandas as pd
 from feature_engineering import extract_features
 from prediction_smoother import PredictionSmoother
 
+from gesture_engine import GestureEngine
+from action_handler import ActionHandler
+
 
 # Setting the default webcam index.
 DEFAULT_CAMERA_INDEX = 0
@@ -255,7 +258,14 @@ def run_live_pose_classifier():
 
     smoother = PredictionSmoother(
     confirmation_frames=3
-)
+    )
+
+    # Creating gesture command processor.
+    gesture_engine = GestureEngine()
+
+
+    # Creating action execution system.
+    action_handler = ActionHandler()
 
 
     print(
@@ -418,6 +428,23 @@ def run_live_pose_classifier():
                             prediction
                         )
                     )
+
+                    # Sending stable gesture into gesture engine.
+                    action = gesture_engine.update(
+                            stable_prediction
+                            )
+
+
+                    # Executing action if a command was detected.
+                    if action:
+
+                        print(
+                            f"Action triggered: {action}"
+                        )
+
+                        action_handler.execute(
+                            action
+                        )
 
 
 

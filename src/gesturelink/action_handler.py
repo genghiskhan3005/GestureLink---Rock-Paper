@@ -1,49 +1,53 @@
 """
 Action handler for GestureLink.
 
-Receiving gesture events from the gesture engine
-and connecting them to file transfer actions.
+Connecting gesture commands with the
+image clipboard system.
+
+Supported actions:
+
+copy
+paste
 """
 
 
-from transfer_manager import TransferManager
+from image_clipboard import ImageClipboard
 
 
 
 class ActionHandler:
     """
-    Managing gesture-triggered actions.
+    Managing gesture-triggered image actions.
     """
 
 
     def __init__(self):
         """
-        Initializing the action system.
+        Initializing image clipboard.
         """
 
 
-        # Creating the transfer manager.
-        self.transfer_manager = TransferManager()
+        # Creating the GestureLink image clipboard.
+        self.image_clipboard = ImageClipboard()
 
 
 
-        # Storing a test image path.
-        # Later this will come from the selected image.
-        self.selected_file = None
+        # Storing the currently selected image.
+        self.selected_image = None
 
 
 
-    def set_selected_file(
+    def set_selected_image(
         self,
-        file_path: str,
+        image_path: str,
     ):
         """
-        Selecting the file that will be copied.
+        Selecting an image to copy.
         """
 
 
-        # Saving the selected file path.
-        self.selected_file = file_path
+        # Saving the selected image path.
+        self.selected_image = image_path
 
 
 
@@ -81,36 +85,36 @@ class ActionHandler:
 
     def copy(self):
         """
-        Handling copy gesture.
+        Handling COPY gesture.
+
+        Copying selected image into
+        GestureLink clipboard.
         """
 
 
-        if self.selected_file is None:
+        if self.selected_image is None:
 
             print(
-                "No file selected for copying."
+                "No image selected."
             )
 
             return False
 
 
 
-        # Sending the selected file
-        # into the transfer buffer.
-        return self.transfer_manager.copy_file(
-            self.selected_file
+        return self.image_clipboard.copy_image(
+            self.selected_image
         )
 
 
 
     def paste(self):
         """
-        Handling paste gesture.
+        Handling PASTE gesture.
+
+        Restoring image from
+        GestureLink clipboard.
         """
 
 
-        # Creating a destination folder
-        # for testing paste.
-        return self.transfer_manager.paste_file(
-            "pasted_files"
-        )
+        return self.image_clipboard.paste_image()
